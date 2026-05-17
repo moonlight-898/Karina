@@ -1,0 +1,83 @@
+import osmnx as ox
+import networkx as nx
+import matplotlib.pyplot as plt
+
+# === TVOJE SOUŘADNICE ===
+start_gps = (50.051447, 14.440185)   # (latitude, longitude)
+cil_gps   = (50.072200, 14.418900)
+
+# =============================================
+# 1. Stažení sítě silnic / chodníků
+# =============================================
+
+# Vyber si typ sítě:
+# "drive" = auto, "bike" = kolo, "walk" = pěšky
+network_type = "walk"        # změň podle potřeby
+
+print("Stahuji data z OpenStreetMap...")
+G = ox.graph_from_point(
+    center_point=start_gps, 
+    dist=4000,               # stáhne okolí do 4 km (dostatek pro Prahu)
+    network_type=network_type,
+    simplify=True
+)
+
+print(f"Staženo {len(G.nodes)} uzlů a {len(G.edges)} hran.")
+
+# =============================================
+# 2. Najdi nejbližší uzly k souřadnicím
+# =============================================
+orig_node = ox.distance.nearest_nodes(G, X=start_gps[1], Y=start_gps[0])
+dest_node = ox.distance.nearest_nodes(G, X=cil_gps[1],   Y=cil_gps[0])
+
+print(f"Start node: {orig_node}")
+print(f"Cíl node:   {dest_node}")
+
+# =============================================
+# 3. Výpočet nejkratší cesty
+# =============================================
+route = ox.shortest_path(G, orig_node, dest_node, weight='length')
+
+# Délka cesty v metrech
+route_length = nx.shortest_path_length(G, orig_node, dest_node, weight='length')
+print(f"\nNejkratší cesta: {route_length:.0f} metrů ≈ {route_length/1000:.2f} km")
+
+# =============================================
+# 4. Zobrazení mapy (volitelné)
+# =============================================
+fig, ax = ox.plot_graph_route(
+    G, 
+    route, 
+    route_color='red', 
+    route_linewidth=6, 
+    node_size=0,
+    bgcolor='white'
+)
+plt.title(f"Nejkratší {network_type} cesta: {route_length:.0f} m")
+plt.show()
+
+# =============================================
+# 5. Export do GPX (pro navigaci)
+# =============================================
+def save_route_to_gpx(route, G, filename="route.gpx"):
+    import gpxpy.gpx
+    gpx = gpxpy.gpx.GPX()
+    gpx_track = gpxpy.gpx.GPXTrack()
+    gpx_track.name = "Nejkratší cesta"
+    gpx.tracks.append(gpx_track)
+    
+    gpx_segment = gpxpy.gpx.GPXTrackSegment()
+    gpx_track.segments.append(gpx_segment)
+    
+    for node in route:
+        point = G.nodes[node]
+        gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(
+            latitude=point['y'], 
+            longitude=point['x']
+        ))
+    
+    with open(filename, "w") as f:
+        f.write(gpx.to_xml())
+    print(f"GPX uložen jako {filename}")
+
+# save_route_to_gpx(route, G)
